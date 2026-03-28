@@ -40,6 +40,243 @@ def role_required(allowed_roles):
 def utility_processor():
     return {'now': datetime.now()}
 
+# Database Initialization Route
+@app.route('/init-db')
+def init_database_route():
+    """Temporary route to initialize database - REMOVE AFTER USE"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Create tables
+        tables = [
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                email VARCHAR(100) NOT NULL,
+                role VARCHAR(20) DEFAULT 'staff',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS patients (
+                patient_id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                dob DATE,
+                contact VARCHAR(20),
+                insurance_no VARCHAR(50),
+                address TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS doctors (
+                doctor_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
+                name VARCHAR(100) NOT NULL,
+                specialization VARCHAR(100),
+                contact VARCHAR(20),
+                email VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS staff (
+                staff_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
+                name VARCHAR(100) NOT NULL,
+                contact VARCHAR(20),
+                email VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS appointments (
+                appointment_id SERIAL PRIMARY KEY,
+                patient_id INTEGER NOT NULL REFERENCES patients(patient_id) ON DELETE CASCADE,
+                doctor_id INTEGER NOT NULL REFERENCES doctors(doctor_id) ON DELETE CASCADE,
+                appointment_date TIMESTAMP NOT NULL,
+                status VARCHAR(20) DEFAULT 'scheduled',
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS clinical_visits (
+                visit_id SERIAL PRIMARY KEY,
+                patient_id INTEGER NOT NULL REFERENCES patients(patient_id) ON DELETE CASCADE,
+                doctor_id INTEGER NOT NULL REFERENCES doctors(doctor_id) ON DELETE CASCADE,
+                visit_date TIMESTAMP NOT NULL,
+                symptoms TEXT,
+                diagnosis TEXT,
+                treatment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS prescriptions (
+                prescription_id SERIAL PRIMARY KEY,
+                visit_id INTEGER NOT NULL REFERENCES clinical_visits(visit_id) ON DELETE CASCADE,
+                medicine_name VARCHAR(100) NOT NULL,
+                dosage VARCHAR(100),
+                duration VARCHAR(100),
+                instructions TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        ]
+        
+        for table in tables:
+            cur.execute(table)
+        
+        conn.commit()
+        
+        # Add sample admin user
+        admin_password = generate_password_hash('admin123')
+        cur.execute("""
+            INSERT INTO users (username, password, email, role) 
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (username) DO NOTHING
+        """, ('admin', admin_password, 'admin@medtrack.com', 'admin'))
+        
+        # Add sample staff user
+        staff_password = generate_password_hash('staff123')
+        cur.execute("""
+            INSERT INTO users (username, password, email, role) 
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (username) DO NOTHING
+        """, ('staff_jane', staff_password, 'jane@medtrack.com', 'staff'))
+        
+        # Add sample doctor user
+        doctor_password = generate_password_hash('doctor123')
+        cur.execute("""
+            INSERT INTO users (username, password, email, role) 
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (username) DO NOTHING
+        """, ('dr_smith', doctor_password, 'smith@medtrack.com', 'doctor'))
+        
+        conn.commit()
+        
+        # Add sample patients
+        cur.execute("""
+            INSERT INTO patients (name, dob, contact, insurance_no, address) 
+            VALUES 
+                ('John Doe', '1985-03-15', '555-0101', 'INS001', '123 Main St, Toronto'),
+                ('Jane Smith', '1990-07-22', '555-0102', 'INS002', '456 Oak Ave, Vancouver'),
+                ('Bob Wilson', '1978-11-30', '555-0103', 'INS003', '789 Pine St, Montreal'),
+                ('Alice Brown', '1995-01-10', '555-0104', 'INS004', '321 Elm St, Calgary'),
+                ('Charlie Davis', '1982-05-18', '555-0105', 'INS005', '654 Maple Dr, Ottawa')
+            ON CONFLICT DO NOTHING
+        """)
+        
+        # Add sample doctors
+        cur.execute("""
+            INSERT INTO doctors (name, specialization, contact, email) 
+            VALUES 
+                ('Dr. Sarah Smith', 'Cardiology', '555-0201', 'sarah.smith@medtrack.com'),
+                ('Dr. Michael Johnson', 'Neurology', '555-0202', 'michael.johnson@medtrack.com'),
+                ('Dr. Emily Brown', 'Pediatrics', '555-0203', 'emily.brown@medtrack.com')
+            ON CONFLICT DO NOTHING
+        """)
+        
+        conn.commit()
+        
+        # Add sample appointments
+        cur.execute("""
+            INSERT INTO appointments (patient_id, doctor_id, appointment_date, status, reason) 
+            VALUES 
+                (1, 1, '2026-04-01 10:00:00', 'scheduled', 'Chest pain'),
+                (2, 2, '2026-04-02 14:30:00', 'scheduled', 'Headache'),
+                (3, 3, '2026-04-03 11:00:00', 'completed', 'Fever'),
+                (1, 2, '2026-04-05 09:30:00', 'scheduled', 'Follow-up')
+            ON CONFLICT DO NOTHING
+        """)
+        
+        # Add sample clinical visits
+        cur.execute("""
+            INSERT INTO clinical_visits (patient_id, doctor_id, visit_date, symptoms, diagnosis, treatment) 
+            VALUES 
+                (1, 1, '2026-03-15 10:30:00', 'Chest pain, shortness of breath', 
+                 'Angina', 'Prescribed nitroglycerin'),
+                (2, 2, '2026-03-16 15:00:00', 'Severe headache, blurred vision', 
+                 'Migraine', 'Prescribed sumatriptan'),
+                (3, 3, '2026-03-17 11:00:00', 'Fever, cough', 
+                 'Upper respiratory infection', 'Prescribed antibiotics')
+            ON CONFLICT DO NOTHING
+        """)
+        
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Database Initialized - MedTrack</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+                .container {
+                    background: white;
+                    border-radius: 10px;
+                    padding: 40px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    max-width: 600px;
+                }
+                h1 { color: #28a745; }
+                .success { color: #28a745; }
+                .btn {
+                    display: inline-block;
+                    padding: 10px 20px;
+                    margin-top: 20px;
+                    background: #667eea;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                }
+                .btn:hover { background: #764ba2; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>✅ Database Initialized Successfully!</h1>
+                <p>All tables have been created and sample data has been added.</p>
+                <h3>Sample Users:</h3>
+                <ul>
+                    <li><strong>Admin:</strong> admin / admin123</li>
+                    <li><strong>Staff:</strong> staff_jane / staff123</li>
+                    <li><strong>Doctor:</strong> dr_smith / doctor123</li>
+                </ul>
+                <a href="/login" class="btn">Go to Login Page</a>
+            </div>
+        </body>
+        </html>
+        """
+    except Exception as e:
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Error - MedTrack</title></head>
+        <body>
+            <h1>❌ Error Initializing Database</h1>
+            <pre>{str(e)}</pre>
+            <a href="/">Go to Home</a>
+        </body>
+        </html>
+        """, 500
+
 # Routes
 @app.route('/')
 def index():
