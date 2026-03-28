@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Details - MedTrack{% endblock %}
+
+{% block page_title %}Patient Details{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-person"></i> Personal Information</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Name:</strong> {{ patient.name }}</p>
+                    <p><strong>Date of Birth:</strong> {{ patient.dob.strftime('%Y-%m-%d') if patient.dob else 'N/A' }}</p>
+                    <p><strong>Age:</strong> 
+                        {% if patient.dob %}
+                            {{ (now.year - patient.dob.year) if now else 'N/A' }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                    <p><strong>Contact:</strong> {{ patient.contact or 'N/A' }}</p>
+                    <p><strong>Insurance No:</strong> {{ patient.insurance_no or 'N/A' }}</p>
+                    <p><strong>Address:</strong> {{ patient.address or 'N/A' }}</p>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('edit_patient', patient_id=patient.patient_id) }}" class="btn btn-warning btn-sm">
+                            <i class="bi bi-pencil"></i> Edit
+                        </a>
+                        <a href="{{ url_for('add_appointment') }}?patient_id={{ patient.patient_id }}" class="btn btn-info btn-sm">
+                            <i class="bi bi-calendar-plus"></i> Schedule Appointment
+                        </a>
+                        <a href="{{ url_for('add_visit') }}?patient_id={{ patient.patient_id }}" class="btn btn-success btn-sm">
+                            <i class="bi bi-clipboard2-plus"></i> New Visit
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-calendar-check"></i> Appointment History</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Doctor</th>
+                                    <th>Status</th>
+                                    <th>Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for appointment in appointments %}
+                                <tr>
+                                    <td>{{ appointment.appointment_date.strftime('%Y-%m-%d %H:%M') if appointment.appointment_date else 'N/A' }}</td>
+                                    <td>{{ appointment.doctor_name }}</td>
+                                    <td>
+                                        <span class="badge badge-{{ appointment.status }}">
+                                            {{ appointment.status|capitalize }}
+                                        </span>
+                                    </td>
+                                    <td>{{ appointment.reason or 'N/A' }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No appointments found</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-clipboard2-pulse"></i> Clinical Visit History</h5>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="visitsAccordion">
+                        {% for visit in visits %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#visit{{ visit.visit_id }}">
+                                    {{ visit.visit_date.strftime('%Y-%m-%d') if visit.visit_date else 'N/A' }} - Dr. {{ visit.doctor_name }}
+                                </button>
+                            </h2>
+                            <div id="visit{{ visit.visit_id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" data-bs-parent="#visitsAccordion">
+                                <div class="accordion-body">
+                                    <p><strong>Symptoms:</strong> {{ visit.symptoms or 'N/A' }}</p>
+                                    <p><strong>Diagnosis:</strong> {{ visit.diagnosis or 'N/A' }}</p>
+                                    <p><strong>Treatment:</strong> {{ visit.treatment or 'N/A' }}</p>
+                                    <a href="{{ url_for('view_visit', visit_id=visit.visit_id) }}" class="btn btn-sm btn-primary">
+                                        View Prescriptions
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-center">No clinical visits recorded</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Add current year for age calculation if needed
+    const now = new Date();
+</script>
+{% endblock %}

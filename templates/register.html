@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Register - MedTrack{% endblock %}
+
+{% block auth_content %}
+<div class="auth-card fade-in">
+    <h2><i class="bi bi-person-plus"></i> Register</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input type="text" class="form-control" id="username" name="username" required>
+        </div>
+        <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input type="email" class="form-control" id="email" name="email" required>
+        </div>
+        <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" name="password" required>
+        </div>
+        <div class="mb-3">
+            <label for="role" class="form-label">Role</label>
+            <select class="form-select" id="role" name="role" required>
+                <option value="staff">Medical Staff</option>
+                <option value="doctor">Doctor</option>
+            </select>
+        </div>
+        
+        <div id="doctorFields" style="display: none;">
+            <div class="mb-3">
+                <label for="doctor_name" class="form-label">Doctor's Full Name</label>
+                <input type="text" class="form-control" id="doctor_name" name="doctor_name">
+            </div>
+            <div class="mb-3">
+                <label for="specialization" class="form-label">Specialization</label>
+                <input type="text" class="form-control" id="specialization" name="specialization">
+            </div>
+            <div class="mb-3">
+                <label for="doctor_contact" class="form-label">Contact Number</label>
+                <input type="text" class="form-control" id="doctor_contact" name="doctor_contact">
+            </div>
+        </div>
+        
+        <div id="staffFields" style="display: none;">
+            <div class="mb-3">
+                <label for="staff_name" class="form-label">Staff Full Name</label>
+                <input type="text" class="form-control" id="staff_name" name="staff_name">
+            </div>
+            <div class="mb-3">
+                <label for="staff_contact" class="form-label">Contact Number</label>
+                <input type="text" class="form-control" id="staff_contact" name="staff_contact">
+            </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary w-100">Register</button>
+    </form>
+    <hr>
+    <p class="text-center mb-0">
+        Already have an account? <a href="{{ url_for('login') }}">Login here</a>
+    </p>
+</div>
+
+<script>
+    const roleSelect = document.getElementById('role');
+    const doctorFields = document.getElementById('doctorFields');
+    const staffFields = document.getElementById('staffFields');
+    
+    roleSelect.addEventListener('change', function() {
+        doctorFields.style.display = 'none';
+        staffFields.style.display = 'none';
+        
+        if (this.value === 'doctor') {
+            doctorFields.style.display = 'block';
+        } else if (this.value === 'staff') {
+            staffFields.style.display = 'block';
+        }
+    });
+    
+    // Trigger change on load
+    roleSelect.dispatchEvent(new Event('change'));
+</script>
+{% endblock %}

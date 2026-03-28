@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Record Clinical Visit - MedTrack{% endblock %}
+
+{% block page_title %}Record New Clinical Visit{% endblock %}
+
+{% block content %}
+<div class="form-container fade-in">
+    <h2><i class="bi bi-clipboard2-plus"></i> Clinical Visit Record</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label for="patient_id" class="form-label">Patient *</label>
+            <select class="form-select" id="patient_id" name="patient_id" required>
+                <option value="">Select Patient</option>
+                {% for patient in patients %}
+                <option value="{{ patient.patient_id }}" {% if request.args.get('patient_id')|int == patient.patient_id %}selected{% endif %}>
+                    {{ patient.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <label for="doctor_id" class="form-label">Doctor *</label>
+            <select class="form-select" id="doctor_id" name="doctor_id" required>
+                <option value="">Select Doctor</option>
+                {% for doctor in doctors %}
+                <option value="{{ doctor.doctor_id }}">
+                    {{ doctor.name }} - {{ doctor.specialization }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <label for="visit_date" class="form-label">Visit Date & Time *</label>
+            <input type="datetime-local" class="form-control" id="visit_date" name="visit_date" required>
+        </div>
+        
+        <div class="mb-3">
+            <label for="symptoms" class="form-label">Symptoms</label>
+            <textarea class="form-control" id="symptoms" name="symptoms" rows="3" 
+                      placeholder="Describe the patient's symptoms"></textarea>
+        </div>
+        
+        <div class="mb-3">
+            <label for="diagnosis" class="form-label">Diagnosis</label>
+            <textarea class="form-control" id="diagnosis" name="diagnosis" rows="3" 
+                      placeholder="Medical diagnosis"></textarea>
+        </div>
+        
+        <div class="mb-3">
+            <label for="treatment" class="form-label">Treatment Plan</label>
+            <textarea class="form-control" id="treatment" name="treatment" rows="3" 
+                      placeholder="Recommended treatment"></textarea>
+        </div>
+        
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="bi bi-capsule"></i> Prescription (Optional)</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="medicine_name" class="form-label">Medicine Name</label>
+                    <input type="text" class="form-control" id="medicine_name" name="medicine_name">
+                </div>
+                <div class="mb-3">
+                    <label for="dosage" class="form-label">Dosage</label>
+                    <input type="text" class="form-control" id="dosage" name="dosage" placeholder="e.g., 500mg">
+                </div>
+                <div class="mb-3">
+                    <label for="duration" class="form-label">Duration</label>
+                    <input type="text" class="form-control" id="duration" name="duration" placeholder="e.g., 7 days">
+                </div>
+                <div class="mb-3">
+                    <label for="instructions" class="form-label">Instructions</label>
+                    <textarea class="form-control" id="instructions" name="instructions" rows="2" 
+                              placeholder="Take with food, etc."></textarea>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save"></i> Save Visit Record
+            </button>
+            <a href="{{ url_for('list_visits') }}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+    // Set max datetime to current time for visit date
+    const visitDateInput = document.getElementById('visit_date');
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    visitDateInput.max = now.toISOString().slice(0, 16);
+    visitDateInput.value = now.toISOString().slice(0, 16);
+</script>
+{% endblock %}

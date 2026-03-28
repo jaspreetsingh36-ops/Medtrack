@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Visit Details - MedTrack{% endblock %}
+
+{% block page_title %}Clinical Visit Details{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-clipboard2-pulse"></i> Visit Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Visit ID:</strong> {{ visit.visit_id }}</p>
+                            <p><strong>Patient:</strong> 
+                                <a href="{{ url_for('view_patient', patient_id=visit.patient_id) }}">
+                                    {{ visit.patient_name }}
+                                </a>
+                            </p>
+                            <p><strong>Doctor:</strong> {{ visit.doctor_name }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Visit Date:</strong> {{ visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit.visit_date else 'N/A' }}</p>
+                            <p><strong>Recorded:</strong> {{ visit.created_at.strftime('%Y-%m-%d %H:%M') if visit.created_at else 'N/A' }}</p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <h6><i class="bi bi-chat"></i> Symptoms</h6>
+                        <p>{{ visit.symptoms or 'No symptoms recorded' }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6><i class="bi bi-stethoscope"></i> Diagnosis</h6>
+                        <p>{{ visit.diagnosis or 'No diagnosis recorded' }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6><i class="bi bi-heart"></i> Treatment</h6>
+                        <p>{{ visit.treatment or 'No treatment recorded' }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-capsule"></i> Prescriptions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Medicine</th>
+                                    <th>Dosage</th>
+                                    <th>Duration</th>
+                                    <th>Instructions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for prescription in prescriptions %}
+                                <tr>
+                                    <td><strong>{{ prescription.medicine_name }}</strong></td>
+                                    <td>{{ prescription.dosage or 'N/A' }}</td>
+                                    <td>{{ prescription.duration or 'N/A' }}</td>
+                                    <td>{{ prescription.instructions or 'N/A' }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No prescriptions for this visit</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <a href="{{ url_for('add_prescription', visit_id=visit.visit_id) }}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-plus-circle"></i> Add Prescription
+                        </a>
+                        <a href="{{ url_for('list_visits') }}" class="btn btn-secondary btn-sm">
+                            <i class="bi bi-arrow-left"></i> Back to Visits
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

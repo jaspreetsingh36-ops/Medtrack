@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Appointment - MedTrack{% endblock %}
+
+{% block page_title %}Schedule New Appointment{% endblock %}
+
+{% block content %}
+<div class="form-container fade-in">
+    <h2><i class="bi bi-calendar-plus"></i> Schedule Appointment</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label for="patient_id" class="form-label">Patient *</label>
+            <select class="form-select" id="patient_id" name="patient_id" required>
+                <option value="">Select Patient</option>
+                {% for patient in patients %}
+                <option value="{{ patient.patient_id }}" {% if request.args.get('patient_id')|int == patient.patient_id %}selected{% endif %}>
+                    {{ patient.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <label for="doctor_id" class="form-label">Doctor *</label>
+            <select class="form-select" id="doctor_id" name="doctor_id" required>
+                <option value="">Select Doctor</option>
+                {% for doctor in doctors %}
+                <option value="{{ doctor.doctor_id }}">
+                    {{ doctor.name }} - {{ doctor.specialization }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <label for="appointment_date" class="form-label">Appointment Date & Time *</label>
+            <input type="datetime-local" class="form-control" id="appointment_date" name="appointment_date" required>
+        </div>
+        
+        <div class="mb-3">
+            <label for="reason" class="form-label">Reason for Visit</label>
+            <textarea class="form-control" id="reason" name="reason" rows="3" 
+                      placeholder="Brief description of symptoms or reason for appointment"></textarea>
+        </div>
+        
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            <small>Please ensure the patient is available at the selected time.</small>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save"></i> Schedule Appointment
+            </button>
+            <a href="{{ url_for('list_appointments') }}" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Cancel
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+    // Set min datetime to current time
+    const datetimeInput = document.getElementById('appointment_date');
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    datetimeInput.min = now.toISOString().slice(0, 16);
+</script>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Clinical Visits - MedTrack{% endblock %}
+
+{% block page_title %}Clinical Visit Records{% endblock %}
+
+{% block content %}
+<div class="table-container fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5><i class="bi bi-clipboard2-pulse"></i> All Clinical Visits</h5>
+        <a href="{{ url_for('add_visit') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Record New Visit
+        </a>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Visit Date</th>
+                    <th>Patient</th>
+                    <th>Doctor</th>
+                    <th>Diagnosis</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for visit in visits %}
+                <tr>
+                    <td>{{ visit.visit_id }}</td>
+                    <td>{{ visit.visit_date.strftime('%Y-%m-%d %H:%M') if visit.visit_date else 'N/A' }}</td>
+                    <td>
+                        <a href="{{ url_for('view_patient', patient_id=visit.patient_id) }}" class="text-decoration-none">
+                            {{ visit.patient_name }}
+                        </a>
+                    </td>
+                    <td>{{ visit.doctor_name }}</td>
+                    <td>{{ visit.diagnosis[:50] + '...' if visit.diagnosis and visit.diagnosis|length > 50 else visit.diagnosis or 'N/A' }}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <a href="{{ url_for('view_visit', visit_id=visit.visit_id) }}" 
+                               class="btn btn-sm btn-info" title="View Details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center">No clinical visits recorded. <a href="{{ url_for('add_visit') }}">Record your first visit</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

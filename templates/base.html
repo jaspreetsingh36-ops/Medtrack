@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedTrack - {% block title %}Medical Records Management System{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    {% if session.user_id %}
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 px-0 sidebar">
+                <div class="sidebar-header">
+                    <h3><i class="bi bi-heart-pulse"></i> MedTrack</h3>
+                    <p>Medical Records System</p>
+                </div>
+                <div class="sidebar-nav">
+                    <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('list_patients') }}" class="{% if request.endpoint == 'list_patients' %}active{% endif %}">
+                        <i class="bi bi-people"></i> Patients
+                    </a>
+                    <a href="{{ url_for('list_doctors') }}" class="{% if request.endpoint == 'list_doctors' %}active{% endif %}">
+                        <i class="bi bi-person-badge"></i> Doctors
+                    </a>
+                    <a href="{{ url_for('list_appointments') }}" class="{% if request.endpoint == 'list_appointments' %}active{% endif %}">
+                        <i class="bi bi-calendar-check"></i> Appointments
+                    </a>
+                    <a href="{{ url_for('list_visits') }}" class="{% if request.endpoint == 'list_visits' %}active{% endif %}">
+                        <i class="bi bi-clipboard2-pulse"></i> Clinical Visits
+                    </a>
+                    <hr class="bg-light">
+                    <a href="{{ url_for('logout') }}">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 content">
+                <nav class="navbar-custom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4>{% block page_title %}Dashboard{% endblock %}</h4>
+                        <div class="user-info">
+                            <i class="bi bi-person-circle"></i>
+                            <span>Welcome, <strong>{{ session.username }}</strong></span>
+                            <span class="badge bg-primary">{{ session.role|capitalize }}</span>
+                        </div>
+                    </div>
+                </nav>
+                
+                <div class="p-4">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show fade-in" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="auth-container">
+        {% block auth_content %}{% endblock %}
+    </div>
+    {% endif %}
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
