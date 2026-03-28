@@ -180,12 +180,7 @@ def dashboard():
                          visit_count=visit_count,
                          recent_appointments=recent_appointments)
 
-# [Continue with all the other routes - patients, doctors, appointments, visits, prescriptions]
-# They will be identical to the MySQL version but with %s instead of %s for parameters
-# (PostgreSQL uses %s just like MySQL for parameterized queries)
-
-# For brevity, I'll continue with one route example, but you'll need all the routes from the previous app.py
-
+# PATIENT ROUTES
 @app.route('/patients')
 @login_required
 def list_patients():
@@ -197,7 +192,410 @@ def list_patients():
     conn.close()
     return render_template('patients/list.html', patients=patients)
 
-# Add all the other routes here...
+@app.route('/patients/add', methods=['GET', 'POST'])
+@login_required
+@role_required(['staff', 'admin'])
+def add_patient():
+    if request.method == 'POST':
+        name = request.form['name']
+        dob = request.form['dob']
+        contact = request.form['contact']
+        insurance_no = request.form.get('insurance_no', '')
+        address = request.form.get('address', '')
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """INSERT INTO patients (name, dob, contact, insurance_no, address) 
+               VALUES (%s, %s, %s, %s, %s)""",
+            (name, dob, contact, insurance_no, address)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        flash('Patient added successfully!', 'success')
+        return redirect(url_for('list_patients'))
+    
+    return render_template('patients/add.html')
+
+@app.route('/patients/edit/<int:patient_id>', methods=['GET', 'POST'])
+@login_required
+@role_required(['staff', 'admin'])
+def edit_patient(patient_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    if request.method == 'POST':
+        name = request.form['name']
+        dob = request.form['dob']
+        contact = request.form['contact']
+        insurance_no = request.form.get('insurance_no', '')
+        address = request.form.get('address', '')
+        
+        cur.execute(
+            """UPDATE patients SET name=%s, dob=%s, contact=%s, 
+               insurance_no=%s, address=%s WHERE patient_id=%s""",
+            (name, dob, contact, insurance_no, address, patient_id)
+        )
+        conn.commit()
+        flash('Patient updated successfully!', 'success')
+        cur.close()
+        conn.close()
+        return redirect(url_for('list_patients'))
+    
+    cur.execute("SELECT * FROM patients WHERE patient_id = %s", (patient_id,))
+    patient = cur.fetchone()
+    cur.close()
+    conn.close()
+    return render_template('patients/edit.html', patient=patient)
+
+@app.route('/patients/delete/<int:patient_id>')
+@login_required
+@role_required(['staff', 'admin'])
+def delete_patient(patient_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("DELETE FROM patients WHERE patient_id = %s", (patient_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Patient deleted successfully!', 'success')
+    return redirect(url_for('list_patients'))
+
+@app.route('/patients/view/<int:patient_id>')
+@login_required
+def view_patient(patient_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # Get patient details
+    cur.execute("SELECT * FROM patients WHERE patient_id = %s", (patient_id,))
+    patient = cur.fetchone()
+    
+    # Get appointments with JOIN
+    cur.execute("""
+        SELECT a.*, d.name as doctor_name 
+        FROM appointments a
+        JOIN doctors d ON a.doctor_id = d.doctor_id
+        WHERE a.patient_id = %s
+        ORDER BY a.appointment_date DESC
+    """, (patient_id,))
+    appointments = cur.fetchall()
+    
+    # Get clinical visits with JOIN
+    cur.execute("""
+        SELECT v.*, d.name as doctor_name
+        FROM clinical_visits v
+        JOIN doctors d ON v.doctor_id = d.doctor_id
+        WHERE v.patient_id = %s
+        ORDER BY v.visit_date DESC
+    """, (patient_id,))
+    visits = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('patients/view.html', 
+                         patient=patient, 
+                         appointments=appointments,
+                         visits=visits)
+
+# DOCTOR ROUTES
+@app.route('/doctors')
+@login_required
+def list_doctors():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM doctors ORDER BY name")
+    doctors = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('doctors/list.html', doctors=doctors)
+
+@app.route('/doctors/add', methods=['GET', 'POST'])
+@login_required
+@role_required(['staff', 'admin'])
+def add_doctor():
+    if request.method == 'POST':
+        name = request.form['name']
+        specialization = request.form['specialization']
+        contact = request.form['contact']
+        email = request.form['email']
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """INSERT INTO doctors (name, specialization, contact, email) 
+               VALUES (%s, %s, %s, %s)""",
+            (name, specialization, contact, email)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        flash('Doctor added successfully!', 'success')
+        return redirect(url_for('list_doctors'))
+    
+    return render_template('doctors/add.html')
+
+@app.route('/doctors/edit/<int:doctor_id>', methods=['GET', 'POST'])
+@login_required
+@role_required(['staff', 'admin'])
+def edit_doctor(doctor_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    if request.method == 'POST':
+        name = request.form['name']
+        specialization = request.form['specialization']
+        contact = request.form['contact']
+        email = request.form['email']
+        
+        cur.execute(
+            """UPDATE doctors SET name=%s, specialization=%s, 
+               contact=%s, email=%s WHERE doctor_id=%s""",
+            (name, specialization, contact, email, doctor_id)
+        )
+        conn.commit()
+        flash('Doctor updated successfully!', 'success')
+        cur.close()
+        conn.close()
+        return redirect(url_for('list_doctors'))
+    
+    cur.execute("SELECT * FROM doctors WHERE doctor_id = %s", (doctor_id,))
+    doctor = cur.fetchone()
+    cur.close()
+    conn.close()
+    return render_template('doctors/edit.html', doctor=doctor)
+
+@app.route('/doctors/delete/<int:doctor_id>')
+@login_required
+@role_required(['staff', 'admin'])
+def delete_doctor(doctor_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("DELETE FROM doctors WHERE doctor_id = %s", (doctor_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Doctor deleted successfully!', 'success')
+    return redirect(url_for('list_doctors'))
+
+# APPOINTMENT ROUTES
+@app.route('/appointments')
+@login_required
+def list_appointments():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""
+        SELECT a.*, p.name as patient_name, d.name as doctor_name
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.patient_id
+        JOIN doctors d ON a.doctor_id = d.doctor_id
+        ORDER BY a.appointment_date DESC
+    """)
+    appointments = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('appointments/list.html', appointments=appointments)
+
+@app.route('/appointments/add', methods=['GET', 'POST'])
+@login_required
+@role_required(['staff', 'admin'])
+def add_appointment():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    if request.method == 'POST':
+        patient_id = request.form['patient_id']
+        doctor_id = request.form['doctor_id']
+        appointment_date = request.form['appointment_date']
+        reason = request.form.get('reason', '')
+        
+        cur.execute(
+            """INSERT INTO appointments (patient_id, doctor_id, appointment_date, status, reason) 
+               VALUES (%s, %s, %s, 'scheduled', %s)""",
+            (patient_id, doctor_id, appointment_date, reason)
+        )
+        conn.commit()
+        flash('Appointment scheduled successfully!', 'success')
+        cur.close()
+        conn.close()
+        return redirect(url_for('list_appointments'))
+    
+    # Get patients and doctors for dropdowns
+    cur.execute("SELECT patient_id, name FROM patients ORDER BY name")
+    patients = cur.fetchall()
+    cur.execute("SELECT doctor_id, name FROM doctors ORDER BY name")
+    doctors = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    return render_template('appointments/add.html', patients=patients, doctors=doctors)
+
+@app.route('/appointments/edit/<int:appointment_id>', methods=['GET', 'POST'])
+@login_required
+@role_required(['staff', 'admin'])
+def edit_appointment(appointment_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    if request.method == 'POST':
+        appointment_date = request.form['appointment_date']
+        status = request.form['status']
+        reason = request.form.get('reason', '')
+        
+        cur.execute(
+            """UPDATE appointments SET appointment_date=%s, status=%s, reason=%s 
+               WHERE appointment_id=%s""",
+            (appointment_date, status, reason, appointment_id)
+        )
+        conn.commit()
+        flash('Appointment updated successfully!', 'success')
+        cur.close()
+        conn.close()
+        return redirect(url_for('list_appointments'))
+    
+    cur.execute("SELECT * FROM appointments WHERE appointment_id = %s", (appointment_id,))
+    appointment = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    return render_template('appointments/edit.html', appointment=appointment)
+
+@app.route('/appointments/delete/<int:appointment_id>')
+@login_required
+@role_required(['staff', 'admin'])
+def delete_appointment(appointment_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("DELETE FROM appointments WHERE appointment_id = %s", (appointment_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash('Appointment cancelled successfully!', 'success')
+    return redirect(url_for('list_appointments'))
+
+# CLINICAL VISIT ROUTES
+@app.route('/visits')
+@login_required
+def list_visits():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""
+        SELECT v.*, p.name as patient_name, d.name as doctor_name
+        FROM clinical_visits v
+        JOIN patients p ON v.patient_id = p.patient_id
+        JOIN doctors d ON v.doctor_id = d.doctor_id
+        ORDER BY v.visit_date DESC
+    """)
+    visits = cur.fetchall()
+    cur.close()
+    conn.close()
+    return render_template('visits/list.html', visits=visits)
+
+@app.route('/visits/add', methods=['GET', 'POST'])
+@login_required
+def add_visit():
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    if request.method == 'POST':
+        patient_id = request.form['patient_id']
+        doctor_id = request.form['doctor_id']
+        visit_date = request.form['visit_date']
+        symptoms = request.form.get('symptoms', '')
+        diagnosis = request.form.get('diagnosis', '')
+        treatment = request.form.get('treatment', '')
+        
+        cur.execute(
+            """INSERT INTO clinical_visits (patient_id, doctor_id, visit_date, symptoms, diagnosis, treatment) 
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING visit_id""",
+            (patient_id, doctor_id, visit_date, symptoms, diagnosis, treatment)
+        )
+        visit_id = cur.fetchone()['visit_id']
+        conn.commit()
+        
+        # Add prescriptions if any
+        if request.form.get('medicine_name'):
+            medicine_name = request.form['medicine_name']
+            dosage = request.form.get('dosage', '')
+            duration = request.form.get('duration', '')
+            instructions = request.form.get('instructions', '')
+            
+            cur.execute(
+                """INSERT INTO prescriptions (visit_id, medicine_name, dosage, duration, instructions) 
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (visit_id, medicine_name, dosage, duration, instructions)
+            )
+            conn.commit()
+        
+        flash('Clinical visit recorded successfully!', 'success')
+        cur.close()
+        conn.close()
+        return redirect(url_for('list_visits'))
+    
+    # Get patients and doctors for dropdowns
+    cur.execute("SELECT patient_id, name FROM patients ORDER BY name")
+    patients = cur.fetchall()
+    cur.execute("SELECT doctor_id, name FROM doctors ORDER BY name")
+    doctors = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    return render_template('visits/add.html', patients=patients, doctors=doctors)
+
+@app.route('/visits/view/<int:visit_id>')
+@login_required
+def view_visit(visit_id):
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # Get visit details with JOIN
+    cur.execute("""
+        SELECT v.*, p.name as patient_name, d.name as doctor_name
+        FROM clinical_visits v
+        JOIN patients p ON v.patient_id = p.patient_id
+        JOIN doctors d ON v.doctor_id = d.doctor_id
+        WHERE v.visit_id = %s
+    """, (visit_id,))
+    visit = cur.fetchone()
+    
+    # Get prescriptions for this visit
+    cur.execute("SELECT * FROM prescriptions WHERE visit_id = %s", (visit_id,))
+    prescriptions = cur.fetchall()
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('visits/view.html', visit=visit, prescriptions=prescriptions)
+
+# PRESCRIPTION ROUTES
+@app.route('/prescriptions/add/<int:visit_id>', methods=['GET', 'POST'])
+@login_required
+def add_prescription(visit_id):
+    if request.method == 'POST':
+        medicine_name = request.form['medicine_name']
+        dosage = request.form.get('dosage', '')
+        duration = request.form.get('duration', '')
+        instructions = request.form.get('instructions', '')
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """INSERT INTO prescriptions (visit_id, medicine_name, dosage, duration, instructions) 
+               VALUES (%s, %s, %s, %s, %s)""",
+            (visit_id, medicine_name, dosage, duration, instructions)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        flash('Prescription added successfully!', 'success')
+        return redirect(url_for('view_visit', visit_id=visit_id))
+    
+    return render_template('prescriptions/add.html', visit_id=visit_id)
 
 if __name__ == '__main__':
     app.run(debug=True)
