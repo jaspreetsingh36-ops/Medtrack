@@ -829,5 +829,111 @@ def add_prescription(visit_id):
     
     return render_template('prescriptions/add.html', visit_id=visit_id)
 
+@app.route('/fix-passwords')
+def fix_passwords():
+    """Temporary route to fix password hashes"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Fix admin password
+        admin_hash = generate_password_hash('admin123')
+        cur.execute("UPDATE users SET password = %s WHERE username = 'admin'", (admin_hash,))
+        
+        # Fix staff password
+        staff_hash = generate_password_hash('staff123')
+        cur.execute("UPDATE users SET password = %s WHERE username = 'staff_jane'", (staff_hash,))
+        
+        # Fix doctor passwords
+        doctor_hash = generate_password_hash('doctor123')
+        cur.execute("UPDATE users SET password = %s WHERE role = 'doctor'", (doctor_hash,))
+        
+        conn.commit()
+        
+        # Check if users exist, if not create them
+        cur.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
+        if cur.fetchone()[0] == 0:
+            admin_hash = generate_password_hash('admin123')
+            cur.execute(
+                "INSERT INTO users (username, password, email, role) VALUES (%s, %s, %s, %s)",
+                ('admin', admin_hash, 'admin@medtrack.com', 'admin')
+            )
+        
+        cur.execute("SELECT COUNT(*) FROM users WHERE username = 'staff_jane'")
+        if cur.fetchone()[0] == 0:
+            staff_hash = generate_password_hash('staff123')
+            cur.execute(
+                "INSERT INTO users (username, password, email, role) VALUES (%s, %s, %s, %s)",
+                ('staff_jane', staff_hash, 'jane@medtrack.com', 'staff')
+            )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Passwords Fixed - MedTrack</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+                .container {
+                    background: white;
+                    border-radius: 10px;
+                    padding: 40px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    max-width: 600px;
+                }
+                h1 { color: #28a745; }
+                .btn {
+                    display: inline-block;
+                    padding: 10px 20px;
+                    margin-top: 20px;
+                    background: #667eea;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                }
+                .btn:hover { background: #764ba2; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>✅ Passwords Fixed Successfully!</h1>
+                <p>All passwords have been properly hashed.</p>
+                <h3>Login Credentials:</h3>
+                <ul>
+                    <li><strong>Admin:</strong> admin / admin123</li>
+                    <li><strong>Staff:</strong> staff_jane / staff123</li>
+                    <li><strong>Doctors:</strong> any doctor username / doctor123</li>
+                </ul>
+                <a href="/login" class="btn">Go to Login Page</a>
+            </div>
+        </body>
+        </html>
+        """
+    except Exception as e:
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Error - MedTrack</title></head>
+        <body>
+            <h1>❌ Error Fixing Passwords</h1>
+            <pre>{str(e)}</pre>
+            <a href="/">Go to Home</a>
+        </body>
+        </html>
+        """, 500
+
 if __name__ == '__main__':
     app.run(debug=True)
