@@ -441,6 +441,7 @@ def list_patients():
     
     if session['role'] == 'admin' or session['role'] == 'staff':
         cur.execute("SELECT * FROM patients ORDER BY name")
+        patients = cur.fetchall()
     else:  # doctor
         cur.execute("""
             SELECT DISTINCT p.* FROM patients p
@@ -453,8 +454,8 @@ def list_patients():
             WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
             ORDER BY p.name
         """, (session['user_id'], session['user_id']))
+        patients = cur.fetchall() or []  # This ensures empty list instead of None
     
-    patients = cur.fetchall()
     cur.close()
     conn.close()
     return render_template('patients/list.html', patients=patients)
