@@ -2,7 +2,12 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from config import Config
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import generate_password_hash
+
+# Generate proper password hashes
+password_hash = generate_password_hash('doctor123')
+print(password_hash)
+
 from functools import wraps
 from datetime import datetime
 import os
