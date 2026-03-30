@@ -14,6 +14,17 @@ app.config.from_object(Config)
 def get_db_connection():
     return psycopg2.connect(app.config['DATABASE_URL'])
 
+# Helper function to get doctor_id from user_id
+def get_doctor_id_from_user_id(user_id):
+    """Get doctor_id from user_id"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (user_id,))
+    result = cur.fetchone()
+    cur.close()
+    conn.close()
+    return result['doctor_id'] if result else None
+
 # Login required decorator
 def login_required(f):
     @wraps(f)
@@ -236,7 +247,6 @@ def init_database_route():
                     max-width: 600px;
                 }
                 h1 { color: #28a745; }
-                .success { color: #28a745; }
                 .btn {
                     display: inline-block;
                     padding: 10px 20px;
@@ -423,7 +433,22 @@ def dashboard():
 def list_patients():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM patients ORDER BY name")
+    
+    if session['role'] == 'admin' or session['role'] == 'staff':
+        cur.execute("SELECT * FROM patients ORDER BY name")
+    else:  # doctor
+        cur.execute("""
+            SELECT DISTINCT p.* FROM patients p
+            LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = (
+                SELECT doctor_id FROM doctors WHERE user_id = %s
+            )
+            LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = (
+                SELECT doctor_id FROM doctors WHERE user_id = %s
+            )
+            WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
+            ORDER BY p.name
+        """, (session['user_id'], session['user_id']))
+    
     patients = cur.fetchall()
     cur.close()
     conn.close()
@@ -506,11 +531,26 @@ def view_patient(patient_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
+    # Check if user has access to this patient
+    if session['role'] not in ['admin', 'staff']:
+        cur.execute("""
+            SELECT 1 FROM appointments WHERE patient_id = %s AND doctor_id = (
+                SELECT doctor_id FROM doctors WHERE user_id = %s
+            )
+            UNION
+            SELECT 1 FROM clinical_visits WHERE patient_id = %s AND doctor_id = (
+                SELECT doctor_id FROM doctors WHERE user_id = %s
+            )
+        """, (patient_id, session['user_id'], patient_id, session['user_id']))
+        if not cur.fetchone():
+            flash('You do not have access to this patient', 'danger')
+            return redirect(url_for('list_patients'))
+    
     # Get patient details
     cur.execute("SELECT * FROM patients WHERE patient_id = %s", (patient_id,))
     patient = cur.fetchone()
     
-    # Get appointments with JOIN
+    # Get all appointments for this patient (full history)
     cur.execute("""
         SELECT a.*, d.name as doctor_name 
         FROM appointments a
@@ -520,7 +560,7 @@ def view_patient(patient_id):
     """, (patient_id,))
     appointments = cur.fetchall()
     
-    # Get clinical visits with JOIN
+    # Get all clinical visits for this patient (full history)
     cur.execute("""
         SELECT v.*, d.name as doctor_name
         FROM clinical_visits v
@@ -625,13 +665,25 @@ def delete_doctor(doctor_id):
 def list_appointments():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("""
-        SELECT a.*, p.name as patient_name, d.name as doctor_name
-        FROM appointments a
-        JOIN patients p ON a.patient_id = p.patient_id
-        JOIN doctors d ON a.doctor_id = d.doctor_id
-        ORDER BY a.appointment_date DESC
-    """)
+    
+    if session['role'] == 'doctor':
+        cur.execute("""
+            SELECT a.*, p.name as patient_name, d.name as doctor_name
+            FROM appointments a
+            JOIN patients p ON a.patient_id = p.patient_id
+            JOIN doctors d ON a.doctor_id = d.doctor_id
+            WHERE a.doctor_id = (SELECT doctor_id FROM doctors WHERE user_id = %s)
+            ORDER BY a.appointment_date DESC
+        """, (session['user_id'],))
+    else:
+        cur.execute("""
+            SELECT a.*, p.name as patient_name, d.name as doctor_name
+            FROM appointments a
+            JOIN patients p ON a.patient_id = p.patient_id
+            JOIN doctors d ON a.doctor_id = d.doctor_id
+            ORDER BY a.appointment_date DESC
+        """)
+    
     appointments = cur.fetchall()
     cur.close()
     conn.close()
@@ -639,14 +691,24 @@ def list_appointments():
 
 @app.route('/appointments/add', methods=['GET', 'POST'])
 @login_required
-@role_required(['staff', 'admin'])
 def add_appointment():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     if request.method == 'POST':
         patient_id = request.form['patient_id']
-        doctor_id = request.form['doctor_id']
+        
+        # If doctor, force their own doctor_id
+        if session['role'] == 'doctor':
+            cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (session['user_id'],))
+            doctor = cur.fetchone()
+            if not doctor:
+                flash('Doctor profile not found', 'danger')
+                return redirect(url_for('dashboard'))
+            doctor_id = doctor['doctor_id']
+        else:
+            doctor_id = request.form['doctor_id']
+        
         appointment_date = request.form['appointment_date']
         reason = request.form.get('reason', '')
         
@@ -661,14 +723,29 @@ def add_appointment():
         conn.close()
         return redirect(url_for('list_appointments'))
     
-    # Get patients and doctors for dropdowns
-    cur.execute("SELECT patient_id, name FROM patients ORDER BY name")
-    patients = cur.fetchall()
-    cur.execute("SELECT doctor_id, name FROM doctors ORDER BY name")
-    doctors = cur.fetchall()
+    # Get patients visible to this user
+    if session['role'] in ['admin', 'staff']:
+        cur.execute("SELECT patient_id, name FROM patients ORDER BY name")
+        patients = cur.fetchall()
+        cur.execute("SELECT doctor_id, name, specialization FROM doctors ORDER BY name")
+        doctors = cur.fetchall()
+    else:  # doctor
+        cur.execute("""
+            SELECT DISTINCT p.patient_id, p.name FROM patients p
+            LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = (
+                SELECT doctor_id FROM doctors WHERE user_id = %s
+            )
+            LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = (
+                SELECT doctor_id FROM doctors WHERE user_id = %s
+            )
+            WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
+            ORDER BY p.name
+        """, (session['user_id'], session['user_id']))
+        patients = cur.fetchall()
+        doctors = []  # Doctors cannot choose another doctor
+    
     cur.close()
     conn.close()
-    
     return render_template('appointments/add.html', patients=patients, doctors=doctors)
 
 @app.route('/appointments/edit/<int:appointment_id>', methods=['GET', 'POST'])
@@ -720,13 +797,25 @@ def delete_appointment(appointment_id):
 def list_visits():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("""
-        SELECT v.*, p.name as patient_name, d.name as doctor_name
-        FROM clinical_visits v
-        JOIN patients p ON v.patient_id = p.patient_id
-        JOIN doctors d ON v.doctor_id = d.doctor_id
-        ORDER BY v.visit_date DESC
-    """)
+    
+    if session['role'] == 'doctor':
+        cur.execute("""
+            SELECT v.*, p.name as patient_name, d.name as doctor_name
+            FROM clinical_visits v
+            JOIN patients p ON v.patient_id = p.patient_id
+            JOIN doctors d ON v.doctor_id = d.doctor_id
+            WHERE v.doctor_id = (SELECT doctor_id FROM doctors WHERE user_id = %s)
+            ORDER BY v.visit_date DESC
+        """, (session['user_id'],))
+    else:
+        cur.execute("""
+            SELECT v.*, p.name as patient_name, d.name as doctor_name
+            FROM clinical_visits v
+            JOIN patients p ON v.patient_id = p.patient_id
+            JOIN doctors d ON v.doctor_id = d.doctor_id
+            ORDER BY v.visit_date DESC
+        """)
+    
     visits = cur.fetchall()
     cur.close()
     conn.close()
@@ -740,7 +829,17 @@ def add_visit():
     
     if request.method == 'POST':
         patient_id = request.form['patient_id']
-        doctor_id = request.form['doctor_id']
+        
+        if session['role'] == 'doctor':
+            cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (session['user_id'],))
+            doctor = cur.fetchone()
+            if not doctor:
+                flash('Doctor profile not found', 'danger')
+                return redirect(url_for('dashboard'))
+            doctor_id = doctor['doctor_id']
+        else:
+            doctor_id = request.form['doctor_id']
+        
         visit_date = request.form['visit_date']
         symptoms = request.form.get('symptoms', '')
         diagnosis = request.form.get('diagnosis', '')
@@ -773,14 +872,29 @@ def add_visit():
         conn.close()
         return redirect(url_for('list_visits'))
     
-    # Get patients and doctors for dropdowns
-    cur.execute("SELECT patient_id, name FROM patients ORDER BY name")
-    patients = cur.fetchall()
-    cur.execute("SELECT doctor_id, name FROM doctors ORDER BY name")
-    doctors = cur.fetchall()
+    # Get visible patients
+    if session['role'] in ['admin', 'staff']:
+        cur.execute("SELECT patient_id, name FROM patients ORDER BY name")
+        patients = cur.fetchall()
+        cur.execute("SELECT doctor_id, name, specialization FROM doctors ORDER BY name")
+        doctors = cur.fetchall()
+    else:
+        cur.execute("""
+            SELECT DISTINCT p.patient_id, p.name FROM patients p
+            LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = (
+                SELECT doctor_id FROM doctors WHERE user_id = %s
+            )
+            LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = (
+                SELECT doctor_id FROM doctors WHERE user_id = %s
+            )
+            WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
+            ORDER BY p.name
+        """, (session['user_id'], session['user_id']))
+        patients = cur.fetchall()
+        doctors = []
+    
     cur.close()
     conn.close()
-    
     return render_template('visits/add.html', patients=patients, doctors=doctors)
 
 @app.route('/visits/view/<int:visit_id>')
