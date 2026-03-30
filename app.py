@@ -10,22 +10,9 @@ import os
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Database connection function
 def get_db_connection():
     return psycopg2.connect(app.config['DATABASE_URL'])
 
-# Helper function to get doctor_id from user_id
-def get_doctor_id_from_user_id(user_id):
-    """Get doctor_id from user_id"""
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (user_id,))
-    result = cur.fetchone()
-    cur.close()
-    conn.close()
-    return result['doctor_id'] if result else None
-
-# Login required decorator
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -35,7 +22,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Role required decorator
 def role_required(allowed_roles):
     def decorator(f):
         @wraps(f)
@@ -51,15 +37,16 @@ def role_required(allowed_roles):
 def utility_processor():
     return {'now': datetime.now()}
 
-# Database Initialization Route
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 @app.route('/init-db')
 def init_database_route():
-    """Temporary route to initialize database - REMOVE AFTER USE"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Create tables
         tables = [
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -144,7 +131,6 @@ def init_database_route():
         
         conn.commit()
         
-        # Add sample admin user
         admin_password = generate_password_hash('admin123')
         cur.execute("""
             INSERT INTO users (username, password, email, role) 
@@ -152,7 +138,6 @@ def init_database_route():
             ON CONFLICT (username) DO NOTHING
         """, ('admin', admin_password, 'admin@medtrack.com', 'admin'))
         
-        # Add sample staff user
         staff_password = generate_password_hash('staff123')
         cur.execute("""
             INSERT INTO users (username, password, email, role) 
@@ -160,7 +145,6 @@ def init_database_route():
             ON CONFLICT (username) DO NOTHING
         """, ('staff_jane', staff_password, 'jane@medtrack.com', 'staff'))
         
-        # Add sample doctor user
         doctor_password = generate_password_hash('doctor123')
         cur.execute("""
             INSERT INTO users (username, password, email, role) 
@@ -170,19 +154,15 @@ def init_database_route():
         
         conn.commit()
         
-        # Add sample patients
         cur.execute("""
             INSERT INTO patients (name, dob, contact, insurance_no, address) 
             VALUES 
                 ('John Doe', '1985-03-15', '555-0101', 'INS001', '123 Main St, Toronto'),
                 ('Jane Smith', '1990-07-22', '555-0102', 'INS002', '456 Oak Ave, Vancouver'),
-                ('Bob Wilson', '1978-11-30', '555-0103', 'INS003', '789 Pine St, Montreal'),
-                ('Alice Brown', '1995-01-10', '555-0104', 'INS004', '321 Elm St, Calgary'),
-                ('Charlie Davis', '1982-05-18', '555-0105', 'INS005', '654 Maple Dr, Ottawa')
+                ('Bob Wilson', '1978-11-30', '555-0103', 'INS003', '789 Pine St, Montreal')
             ON CONFLICT DO NOTHING
         """)
         
-        # Add sample doctors
         cur.execute("""
             INSERT INTO doctors (name, specialization, contact, email) 
             VALUES 
@@ -194,103 +174,22 @@ def init_database_route():
         
         conn.commit()
         
-        # Add sample appointments
         cur.execute("""
             INSERT INTO appointments (patient_id, doctor_id, appointment_date, status, reason) 
             VALUES 
                 (1, 1, '2026-04-01 10:00:00', 'scheduled', 'Chest pain'),
                 (2, 2, '2026-04-02 14:30:00', 'scheduled', 'Headache'),
-                (3, 3, '2026-04-03 11:00:00', 'completed', 'Fever'),
-                (1, 2, '2026-04-05 09:30:00', 'scheduled', 'Follow-up')
-            ON CONFLICT DO NOTHING
-        """)
-        
-        # Add sample clinical visits
-        cur.execute("""
-            INSERT INTO clinical_visits (patient_id, doctor_id, visit_date, symptoms, diagnosis, treatment) 
-            VALUES 
-                (1, 1, '2026-03-15 10:30:00', 'Chest pain, shortness of breath', 
-                 'Angina', 'Prescribed nitroglycerin'),
-                (2, 2, '2026-03-16 15:00:00', 'Severe headache, blurred vision', 
-                 'Migraine', 'Prescribed sumatriptan'),
-                (3, 3, '2026-03-17 11:00:00', 'Fever, cough', 
-                 'Upper respiratory infection', 'Prescribed antibiotics')
+                (3, 3, '2026-04-03 11:00:00', 'completed', 'Fever')
             ON CONFLICT DO NOTHING
         """)
         
         conn.commit()
-        
         cur.close()
         conn.close()
         
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Database Initialized - MedTrack</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    margin: 0;
-                    padding: 20px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                }
-                .container {
-                    background: white;
-                    border-radius: 10px;
-                    padding: 40px;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-                    max-width: 600px;
-                }
-                h1 { color: #28a745; }
-                .btn {
-                    display: inline-block;
-                    padding: 10px 20px;
-                    margin-top: 20px;
-                    background: #667eea;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 5px;
-                }
-                .btn:hover { background: #764ba2; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>✅ Database Initialized Successfully!</h1>
-                <p>All tables have been created and sample data has been added.</p>
-                <h3>Sample Users:</h3>
-                <ul>
-                    <li><strong>Admin:</strong> admin / admin123</li>
-                    <li><strong>Staff:</strong> staff_jane / staff123</li>
-                    <li><strong>Doctor:</strong> dr_smith / doctor123</li>
-                </ul>
-                <a href="/login" class="btn">Go to Login Page</a>
-            </div>
-        </body>
-        </html>
-        """
+        return '<h1>✅ Database Initialized!</h1><a href="/login">Go to Login</a>'
     except Exception as e:
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head><title>Error - MedTrack</title></head>
-        <body>
-            <h1>❌ Error Initializing Database</h1>
-            <pre>{str(e)}</pre>
-            <a href="/">Go to Home</a>
-        </body>
-        </html>
-        """, 500
-
-# Routes
-@app.route('/')
-def index():
-    return render_template('index.html')
+        return f'<h1>Error: {str(e)}</h1>'
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -303,7 +202,6 @@ def register():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Check if user exists
         cur.execute("SELECT * FROM users WHERE username = %s", (username,))
         user = cur.fetchone()
         
@@ -313,7 +211,6 @@ def register():
             conn.close()
             return redirect(url_for('register'))
         
-        # Create new user
         hashed_password = generate_password_hash(password)
         cur.execute(
             "INSERT INTO users (username, password, email, role) VALUES (%s, %s, %s, %s) RETURNING user_id",
@@ -322,24 +219,19 @@ def register():
         user_id = cur.fetchone()['user_id']
         conn.commit()
         
-        # If role is doctor, create doctor profile
         if role == 'doctor':
             doctor_name = request.form.get('doctor_name')
             specialization = request.form.get('specialization')
             doctor_contact = request.form.get('doctor_contact')
-            
             cur.execute(
                 """INSERT INTO doctors (user_id, name, specialization, contact, email) 
                    VALUES (%s, %s, %s, %s, %s)""",
                 (user_id, doctor_name, specialization, doctor_contact, email)
             )
             conn.commit()
-        
-        # If role is staff, create staff record
         elif role == 'staff':
             staff_name = request.form.get('staff_name')
             staff_contact = request.form.get('staff_contact')
-            
             cur.execute(
                 """INSERT INTO staff (user_id, name, contact, email) 
                    VALUES (%s, %s, %s, %s)""",
@@ -349,7 +241,6 @@ def register():
         
         cur.close()
         conn.close()
-        
         flash('Registration successful! Please login.', 'success')
         return redirect(url_for('login'))
     
@@ -391,7 +282,6 @@ def dashboard():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Get counts for dashboard
     cur.execute("SELECT COUNT(*) as count FROM patients")
     patient_count = cur.fetchone()['count']
     
@@ -404,7 +294,6 @@ def dashboard():
     cur.execute("SELECT COUNT(*) as count FROM clinical_visits WHERE visit_date >= CURRENT_DATE")
     visit_count = cur.fetchone()['count']
     
-    # Recent appointments with JOIN
     cur.execute("""
         SELECT a.appointment_id, a.appointment_date, a.status, 
                p.name as patient_name, d.name as doctor_name
@@ -437,29 +326,53 @@ def list_patients():
     if session['role'] == 'admin' or session['role'] == 'staff':
         cur.execute("SELECT * FROM patients ORDER BY name")
         patients = cur.fetchall()
-    else:  # doctor
-        cur.execute("""
-            SELECT DISTINCT p.* FROM patients p
-            LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = (
-                SELECT doctor_id FROM doctors WHERE user_id = %s
-            )
-            LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = (
-                SELECT doctor_id FROM doctors WHERE user_id = %s
-            )
-            WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
-            ORDER BY p.name
-        """, (session['user_id'], session['user_id']))
+    else:
+        # Get doctor_id first
+        cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (session['user_id'],))
+        doctor = cur.fetchone()
+        if doctor:
+            doctor_id = doctor['doctor_id']
+            cur.execute("""
+                SELECT DISTINCT p.* FROM patients p
+                LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = %s
+                LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = %s
+                WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
+                ORDER BY p.name
+            """, (doctor_id, doctor_id))
+        else:
+            patients = []
         patients = cur.fetchall()
     
     cur.close()
     conn.close()
     return render_template('patients/list.html', patients=patients)
 
-# Add all other routes (patients/add, patients/edit, etc.) here...
-# [The rest of your routes remain the same]
-
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route('/patients/add', methods=['GET', 'POST'])
+@login_required
+@role_required(['staff', 'admin'])
+def add_patient():
+    if request.method == 'POST':
+        name = request.form['name']
+        dob = request.form['dob']
+        contact = request.form['contact']
+        insurance_no = request.form.get('insurance_no', '')
+        address = request.form.get('address', '')
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            """INSERT INTO patients (name, dob, contact, insurance_no, address) 
+               VALUES (%s, %s, %s, %s, %s)""",
+            (name, dob, contact, insurance_no, address)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        flash('Patient added successfully!', 'success')
+        return redirect(url_for('list_patients'))
+    
+    return render_template('patients/add.html')
 
 @app.route('/patients/edit/<int:patient_id>', methods=['GET', 'POST'])
 @login_required
@@ -511,26 +424,9 @@ def view_patient(patient_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Check if user has access to this patient
-    if session['role'] not in ['admin', 'staff']:
-        cur.execute("""
-            SELECT 1 FROM appointments WHERE patient_id = %s AND doctor_id = (
-                SELECT doctor_id FROM doctors WHERE user_id = %s
-            )
-            UNION
-            SELECT 1 FROM clinical_visits WHERE patient_id = %s AND doctor_id = (
-                SELECT doctor_id FROM doctors WHERE user_id = %s
-            )
-        """, (patient_id, session['user_id'], patient_id, session['user_id']))
-        if not cur.fetchone():
-            flash('You do not have access to this patient', 'danger')
-            return redirect(url_for('list_patients'))
-    
-    # Get patient details
     cur.execute("SELECT * FROM patients WHERE patient_id = %s", (patient_id,))
     patient = cur.fetchone()
     
-    # Get all appointments for this patient (full history)
     cur.execute("""
         SELECT a.*, d.name as doctor_name 
         FROM appointments a
@@ -540,7 +436,6 @@ def view_patient(patient_id):
     """, (patient_id,))
     appointments = cur.fetchall()
     
-    # Get all clinical visits for this patient (full history)
     cur.execute("""
         SELECT v.*, d.name as doctor_name
         FROM clinical_visits v
@@ -647,14 +542,19 @@ def list_appointments():
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     if session['role'] == 'doctor':
-        cur.execute("""
-            SELECT a.*, p.name as patient_name, d.name as doctor_name
-            FROM appointments a
-            JOIN patients p ON a.patient_id = p.patient_id
-            JOIN doctors d ON a.doctor_id = d.doctor_id
-            WHERE a.doctor_id = (SELECT doctor_id FROM doctors WHERE user_id = %s)
-            ORDER BY a.appointment_date DESC
-        """, (session['user_id'],))
+        cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (session['user_id'],))
+        doctor = cur.fetchone()
+        if doctor:
+            cur.execute("""
+                SELECT a.*, p.name as patient_name, d.name as doctor_name
+                FROM appointments a
+                JOIN patients p ON a.patient_id = p.patient_id
+                JOIN doctors d ON a.doctor_id = d.doctor_id
+                WHERE a.doctor_id = %s
+                ORDER BY a.appointment_date DESC
+            """, (doctor['doctor_id'],))
+        else:
+            appointments = []
     else:
         cur.execute("""
             SELECT a.*, p.name as patient_name, d.name as doctor_name
@@ -678,7 +578,6 @@ def add_appointment():
     if request.method == 'POST':
         patient_id = request.form['patient_id']
         
-        # If doctor, force their own doctor_id
         if session['role'] == 'doctor':
             cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (session['user_id'],))
             doctor = cur.fetchone()
@@ -703,26 +602,26 @@ def add_appointment():
         conn.close()
         return redirect(url_for('list_appointments'))
     
-    # Get patients visible to this user
     if session['role'] in ['admin', 'staff']:
         cur.execute("SELECT patient_id, name FROM patients ORDER BY name")
         patients = cur.fetchall()
         cur.execute("SELECT doctor_id, name, specialization FROM doctors ORDER BY name")
         doctors = cur.fetchall()
-    else:  # doctor
-        cur.execute("""
-            SELECT DISTINCT p.patient_id, p.name FROM patients p
-            LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = (
-                SELECT doctor_id FROM doctors WHERE user_id = %s
-            )
-            LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = (
-                SELECT doctor_id FROM doctors WHERE user_id = %s
-            )
-            WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
-            ORDER BY p.name
-        """, (session['user_id'], session['user_id']))
-        patients = cur.fetchall()
-        doctors = []  # Doctors cannot choose another doctor
+    else:
+        cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (session['user_id'],))
+        doctor = cur.fetchone()
+        if doctor:
+            cur.execute("""
+                SELECT DISTINCT p.patient_id, p.name FROM patients p
+                LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = %s
+                LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = %s
+                WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
+                ORDER BY p.name
+            """, (doctor['doctor_id'], doctor['doctor_id']))
+            patients = cur.fetchall()
+        else:
+            patients = []
+        doctors = []
     
     cur.close()
     conn.close()
@@ -779,14 +678,19 @@ def list_visits():
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     if session['role'] == 'doctor':
-        cur.execute("""
-            SELECT v.*, p.name as patient_name, d.name as doctor_name
-            FROM clinical_visits v
-            JOIN patients p ON v.patient_id = p.patient_id
-            JOIN doctors d ON v.doctor_id = d.doctor_id
-            WHERE v.doctor_id = (SELECT doctor_id FROM doctors WHERE user_id = %s)
-            ORDER BY v.visit_date DESC
-        """, (session['user_id'],))
+        cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (session['user_id'],))
+        doctor = cur.fetchone()
+        if doctor:
+            cur.execute("""
+                SELECT v.*, p.name as patient_name, d.name as doctor_name
+                FROM clinical_visits v
+                JOIN patients p ON v.patient_id = p.patient_id
+                JOIN doctors d ON v.doctor_id = d.doctor_id
+                WHERE v.doctor_id = %s
+                ORDER BY v.visit_date DESC
+            """, (doctor['doctor_id'],))
+        else:
+            visits = []
     else:
         cur.execute("""
             SELECT v.*, p.name as patient_name, d.name as doctor_name
@@ -833,7 +737,6 @@ def add_visit():
         visit_id = cur.fetchone()['visit_id']
         conn.commit()
         
-        # Add prescriptions if any
         if request.form.get('medicine_name'):
             medicine_name = request.form['medicine_name']
             dosage = request.form.get('dosage', '')
@@ -852,25 +755,25 @@ def add_visit():
         conn.close()
         return redirect(url_for('list_visits'))
     
-    # Get visible patients
     if session['role'] in ['admin', 'staff']:
         cur.execute("SELECT patient_id, name FROM patients ORDER BY name")
         patients = cur.fetchall()
         cur.execute("SELECT doctor_id, name, specialization FROM doctors ORDER BY name")
         doctors = cur.fetchall()
     else:
-        cur.execute("""
-            SELECT DISTINCT p.patient_id, p.name FROM patients p
-            LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = (
-                SELECT doctor_id FROM doctors WHERE user_id = %s
-            )
-            LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = (
-                SELECT doctor_id FROM doctors WHERE user_id = %s
-            )
-            WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
-            ORDER BY p.name
-        """, (session['user_id'], session['user_id']))
-        patients = cur.fetchall()
+        cur.execute("SELECT doctor_id FROM doctors WHERE user_id = %s", (session['user_id'],))
+        doctor = cur.fetchone()
+        if doctor:
+            cur.execute("""
+                SELECT DISTINCT p.patient_id, p.name FROM patients p
+                LEFT JOIN appointments a ON p.patient_id = a.patient_id AND a.doctor_id = %s
+                LEFT JOIN clinical_visits v ON p.patient_id = v.patient_id AND v.doctor_id = %s
+                WHERE a.appointment_id IS NOT NULL OR v.visit_id IS NOT NULL
+                ORDER BY p.name
+            """, (doctor['doctor_id'], doctor['doctor_id']))
+            patients = cur.fetchall()
+        else:
+            patients = []
         doctors = []
     
     cur.close()
@@ -883,7 +786,6 @@ def view_visit(visit_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    # Get visit details with JOIN
     cur.execute("""
         SELECT v.*, p.name as patient_name, d.name as doctor_name
         FROM clinical_visits v
@@ -893,7 +795,6 @@ def view_visit(visit_id):
     """, (visit_id,))
     visit = cur.fetchone()
     
-    # Get prescriptions for this visit
     cur.execute("SELECT * FROM prescriptions WHERE visit_id = %s", (visit_id,))
     prescriptions = cur.fetchall()
     
