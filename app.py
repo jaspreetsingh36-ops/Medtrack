@@ -1,19 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from config import Config
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-from datetime import datetime
 import os
-import traceback
 
 app = Flask(__name__)
-app.config.from_object(Config)
 app.secret_key = 'medtrack-secret-key-2024'
 
+# Database configuration - Update with your Render database URL
+DATABASE_URL = "postgresql://medtrack_user:W44bRWWdInicqwFzUYiJJ2bCHwonUeiv@dpg-d73lhs94tr6s73catuog-a.oregon-postgres.render.com/medtrack_db_lq7i"
+
 def get_db_connection():
-    return psycopg2.connect(app.config['DATABASE_URL'])
+    return psycopg2.connect(DATABASE_URL)
 
 def login_required(f):
     @wraps(f)
@@ -26,26 +25,68 @@ def login_required(f):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>MedTrack - Login</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .container {
+                background: white;
+                border-radius: 10px;
+                padding: 40px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                max-width: 400px;
+                width: 100%;
+            }
+            h1 { color: #667eea; text-align: center; }
+            .btn {
+                display: inline-block;
+                padding: 10px 20px;
+                margin: 10px 5px;
+                background: #667eea;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+                text-align: center;
+            }
+            .btn:hover { background: #764ba2; }
+            .buttons { text-align: center; margin-top: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🏥 MedTrack</h1>
+            <p style="text-align: center;">Medical Records Management System</p>
+            <div class="buttons">
+                <a href="/login" class="btn">Login</a>
+                <a href="/setup" class="btn">Setup Database</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
 
-@app.route('/init-db')
-def init_database_route():
+@app.route('/setup')
+def setup():
+    """Setup database and create admin user"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Drop and recreate tables
-        cur.execute("DROP TABLE IF EXISTS prescriptions CASCADE")
-        cur.execute("DROP TABLE IF EXISTS clinical_visits CASCADE")
-        cur.execute("DROP TABLE IF EXISTS appointments CASCADE")
-        cur.execute("DROP TABLE IF EXISTS staff CASCADE")
-        cur.execute("DROP TABLE IF EXISTS doctors CASCADE")
-        cur.execute("DROP TABLE IF EXISTS patients CASCADE")
-        cur.execute("DROP TABLE IF EXISTS users CASCADE")
-        
         # Create users table
         cur.execute("""
-            CREATE TABLE users (
+            CREATE TABLE IF NOT EXISTS users (
                 user_id SERIAL PRIMARY KEY,
                 username VARCHAR(50) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
@@ -54,129 +95,37 @@ def init_database_route():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Create patients table
-        cur.execute("""
-            CREATE TABLE patients (
-                patient_id SERIAL PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                dob DATE,
-                contact VARCHAR(20),
-                insurance_no VARCHAR(50),
-                address TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create doctors table
-        cur.execute("""
-            CREATE TABLE doctors (
-                doctor_id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
-                name VARCHAR(100) NOT NULL,
-                specialization VARCHAR(100),
-                contact VARCHAR(20),
-                email VARCHAR(100),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create appointments table
-        cur.execute("""
-            CREATE TABLE appointments (
-                appointment_id SERIAL PRIMARY KEY,
-                patient_id INTEGER NOT NULL REFERENCES patients(patient_id) ON DELETE CASCADE,
-                doctor_id INTEGER NOT NULL REFERENCES doctors(doctor_id) ON DELETE CASCADE,
-                appointment_date TIMESTAMP NOT NULL,
-                status VARCHAR(20) DEFAULT 'scheduled',
-                reason TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create clinical_visits table
-        cur.execute("""
-            CREATE TABLE clinical_visits (
-                visit_id SERIAL PRIMARY KEY,
-                patient_id INTEGER NOT NULL REFERENCES patients(patient_id) ON DELETE CASCADE,
-                doctor_id INTEGER NOT NULL REFERENCES doctors(doctor_id) ON DELETE CASCADE,
-                visit_date TIMESTAMP NOT NULL,
-                symptoms TEXT,
-                diagnosis TEXT,
-                treatment TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create prescriptions table
-        cur.execute("""
-            CREATE TABLE prescriptions (
-                prescription_id SERIAL PRIMARY KEY,
-                visit_id INTEGER NOT NULL REFERENCES clinical_visits(visit_id) ON DELETE CASCADE,
-                medicine_name VARCHAR(100) NOT NULL,
-                dosage VARCHAR(100),
-                duration VARCHAR(100),
-                instructions TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
         conn.commit()
         
-        # Create users with proper password hashes
-        admin_hash = generate_password_hash('admin123')
-        staff_hash = generate_password_hash('staff123')
-        doctor_hash = generate_password_hash('doctor123')
+        # Check if admin exists
+        cur.execute("SELECT * FROM users WHERE username = 'admin'")
+        admin_exists = cur.fetchone()
         
-        cur.execute("INSERT INTO users (username, password, email, role) VALUES (%s, %s, %s, %s)",
-                    ('admin', admin_hash, 'admin@medtrack.com', 'admin'))
-        cur.execute("INSERT INTO users (username, password, email, role) VALUES (%s, %s, %s, %s)",
-                    ('staff_jane', staff_hash, 'jane@medtrack.com', 'staff'))
-        cur.execute("INSERT INTO users (username, password, email, role) VALUES (%s, %s, %s, %s)",
-                    ('dr_smith', doctor_hash, 'sarah.smith@medtrack.com', 'doctor'))
-        conn.commit()
+        if not admin_exists:
+            # Create admin user with proper password hash
+            admin_hash = generate_password_hash('admin123')
+            cur.execute(
+                "INSERT INTO users (username, password, email, role) VALUES (%s, %s, %s, %s)",
+                ('admin', admin_hash, 'admin@medtrack.com', 'admin')
+            )
+            conn.commit()
+            message = "✅ Admin user created! Password: admin123"
+        else:
+            message = "✅ Admin user already exists"
         
         cur.close()
         conn.close()
         
-        return """
+        return f'''
         <html>
-        <body style="font-family: Arial; padding: 20px;">
-            <h1 style="color: green;">✅ Database Initialized!</h1>
-            <p>Users created:</p>
-            <ul>
-                <li>admin / admin123 (Admin)</li>
-                <li>staff_jane / staff123 (Staff)</li>
-                <li>dr_smith / doctor123 (Doctor)</li>
-            </ul>
+        <body style="font-family: Arial; padding: 20px; text-align: center;">
+            <h1 style="color: green;">{message}</h1>
             <a href="/login" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Go to Login</a>
         </body>
         </html>
-        """
+        '''
     except Exception as e:
-        return f"<h1>Error: {str(e)}</h1><pre>{traceback.format_exc()}</pre>"
-
-@app.route('/check-users')
-def check_users():
-    """Debug route to see users in database"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT user_id, username, role, password FROM users")
-        users = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        html = "<h1>Users in Database</h1>"
-        html += "<table border='1' cellpadding='10'>"
-        html += "<tr><th>ID</th><th>Username</th><th>Role</th><th>Password Hash (first 50 chars)</th></tr>"
-        for user in users:
-            html += f"<tr><td>{user['user_id']}</td><td>{user['username']}</td><td>{user['role']}</td><td>{user['password'][:50]}...</td></tr>"
-        html += "</table>"
-        html += '<br><a href="/login">Back to Login</a>'
-        return html
-    except Exception as e:
-        return f"Error: {str(e)}"
+        return f'<h1>Error: {str(e)}</h1>'
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -193,12 +142,10 @@ def login():
             conn.close()
             
             if user:
-                # Check password
                 if check_password_hash(user['password'], password):
                     session['user_id'] = user['user_id']
                     session['username'] = user['username']
                     session['role'] = user['role']
-                    flash(f'Welcome {username}!', 'success')
                     return redirect(url_for('dashboard'))
                 else:
                     flash('Invalid password', 'danger')
@@ -206,23 +153,148 @@ def login():
                 flash('Username not found', 'danger')
         except Exception as e:
             flash(f'Error: {str(e)}', 'danger')
+        
+        return redirect(url_for('login'))
     
-    return render_template('login.html')
+    # Show login form
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Login - MedTrack</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .container {
+                background: white;
+                border-radius: 10px;
+                padding: 40px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                max-width: 400px;
+                width: 100%;
+            }
+            h2 { color: #667eea; text-align: center; }
+            input {
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+            }
+            button {
+                width: 100%;
+                padding: 10px;
+                background: #667eea;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+            button:hover { background: #764ba2; }
+            .flash {
+                padding: 10px;
+                margin: 10px 0;
+                border-radius: 5px;
+                background: #f8d7da;
+                color: #721c24;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>MedTrack Login</h2>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST">
+                <input type="text" name="username" placeholder="Username" required>
+                <input type="password" name="password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+            <p style="text-align: center; margin-top: 20px;">
+                <small>Demo: admin / admin123</small>
+            </p>
+        </div>
+    </body>
+    </html>
+    '''
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    return render_template('dashboard.html', 
-                         patient_count=0,
-                         doctor_count=0,
-                         appointment_count=0,
-                         visit_count=0,
-                         recent_appointments=[])
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Dashboard - MedTrack</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background: #f0f2f5;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            .header {
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .card {
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            h1 { color: #667eea; }
+            .logout {
+                background: #dc3545;
+                color: white;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 5px;
+            }
+            .logout:hover { background: #c82333; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🏥 MedTrack Dashboard</h1>
+                <p>Welcome, {{ session.username }}! (Role: {{ session.role }})</p>
+                <a href="/logout" class="logout">Logout</a>
+            </div>
+            <div class="card">
+                <h2>✅ Login Successful!</h2>
+                <p>Your MedTrack application is working correctly.</p>
+                <p>You can now add the full CRUD functionality back.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
 
 @app.route('/logout')
 def logout():
     session.clear()
-    flash('Logged out', 'info')
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
